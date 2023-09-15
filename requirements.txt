@@ -1,0 +1,6 @@
+setproctitle
+psutil
+evaluate
+torch
+"ray[default]==2.7.0rc0"
+"ray[serve]==2.7.0rc0"
