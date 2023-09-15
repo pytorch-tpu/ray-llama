@@ -2,8 +2,6 @@
 Examples for running Llama 2 on Ray with [Google Cloud TPUs](https://cloud.google.com/tpu).
 
 
-Note: This is not an officially supported Google Product!
-
 ## Folder structure
 - [cluster](cluster/): sample YAML files for creating your Ray cluster.
 - [notebooks](notebooks/): sample notebook to demonstrate interacting with Ray TPU clusters.
