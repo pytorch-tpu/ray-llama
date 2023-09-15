@@ -10,3 +10,10 @@ Examples for running Llama 2 on Ray with [Google Cloud TPUs](https://cloud.googl
 - [train](train/): sample code for pretraining from scratch.
 - [scripts](scripts/): sample scripts to automate common tasks.
 
+## How to Get Started
+
+To get started with this repo, a great option to start is to started with an interactive notebook environment. See [notebooks](notebooks/).
+
+If you are interested in large scale training runs, see [train](train/) to get started.
+
+If you are interested in serving, see [serve](serve/) to get started.
