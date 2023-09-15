@@ -84,7 +84,6 @@ class LlamaServer:
         import torch
         import torch_xla
         import torch_xla.runtime as xr
-        xr.use_spmd()
 
         import os
         import socket
