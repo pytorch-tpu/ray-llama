@@ -19,12 +19,7 @@ USER root
 RUN apt-get -y update && apt-get -y upgrade
 RUN apt-get -y install rsync
 
-COPY ray-3.0.0.dev0-cp38-cp38-manylinux2014_x86_64.whl .
-COPY tokenizer.model .
-
-RUN pip install --upgrade "ray[default]==2.7.0rc0" "ray[serve]==2.7.0rc0"
-RUN pip install ray-3.0.0.dev0-cp38-cp38-manylinux2014_x86_64.whl
-RUN pip install gradio==3.19
+RUN pip install --upgrade "ray[default]==2.7.0" "ray[serve]==2.7.0"
 
 RUN yes | pip uninstall transformers
 RUN pip install transformers[torch]
