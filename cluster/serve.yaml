@@ -17,7 +17,7 @@ cluster_name: torch-llama2-serve
 max_workers: 3
 
 docker:
-    image: null  # Fill this out with your GCR link.
+    image: gcr.io/mlperf-high-priority-project/ray-llama2:serve  # Fill this out with your GCR link.
     container_name: "ray_docker" # e.g. ray_docker
     pull_before_run: True
     run_options:  # Extra options to pass into "docker run"
@@ -54,7 +54,7 @@ provider:
     type: gcp
     region: us-central2
     availability_zone: us-central2-b
-    project_id: null  # fill this out
+    project_id: mlperf-high-priority-project  # fill this out
 
 initialization_commands:
   # Installs Docker if it doesn't exist

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-GCR_PATH= # fill this part out
+GCR_PATH=gcr.io/mlperf-high-priority-project/ray-llama2# fill this part out
 
 if [ -z $GCR_PATH ]
 then

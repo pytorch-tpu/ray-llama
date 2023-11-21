@@ -17,7 +17,7 @@ cluster_name: torch-llama2-train
 max_workers: 1
 
 docker:
-    image: null  # Fill this out
+    image: gcr.io/mlperf-high-priority-project/ray-llama2:train  # Fill this out
     container_name: "ray_docker"
     pull_before_run: True
     run_options:
@@ -53,7 +53,7 @@ provider:
     type: gcp
     region: us-central2
     availability_zone: us-central2-b
-    project_id: null  # Fill this out
+    project_id: mlperf-high-priority-project  # Fill this out
 
 initialization_commands:
   # Installs Docker if it doesn't exist

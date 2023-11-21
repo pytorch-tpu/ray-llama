@@ -1,28 +1,11 @@
-# Copyright 2023 The Google Cloud ML Accelerators Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Ray Serve Llama example."""
+"""LLaMA Ray runner without Serve.
 
+This should generally be easier to iterate on than a full serve deployment.
+
+"""
 from typing import Iterable, List
-from fastapi import FastAPI
-from fastapi.responses import Response
+import time
 import ray
-from ray import serve
-from ray.serve.gradio_integrations import GradioIngress
-
-import gradio as gr
-import asyncio
 
 
 _VALID_MODELS = [
@@ -31,41 +14,9 @@ _VALID_MODELS = [
     "llama-2-70b",
 ]
 _MAX_BATCH_SIZE = 1
-
-app = FastAPI()
-
-RUNTIME = {
-    "env_vars": {"PJRT_DEVICE": "TPU"}
-}
-
-# Replace this with a GCS path
 _CHECKPOINT_PATH = "gs://ray-llama-demo"
-
-
-@serve.deployment
-class MyGradioServer(GradioIngress):
-
-    def __call__(self, text):
-        generated_list = self.generator(
-            text, do_sample=True, min_length=20, max_length=100
-        )
-        generated = generated_list[0]["generated_text"]
-        return generated
-
-    def __init__(self, llama_handle):
-        self._handle = llama_handle
-
-        super().__init__(lambda: gr.Interface(
-            fn=self.fanout,
-            inputs="textbox",
-            outputs="textbox"))
-
-    async def fanout(self, text: str):
-        ref = await asyncio.gather(self._handle.remote(text))
-        result = ray.get(ref)
-        return (
-            f"[GradIO]: {result}"
-        )
+_ENABLE_VERBOSE_LOGGING = True
+_LOAD_CHECKPOINT = True
 
 
 @ray.remote(resources={"TPU": 4})
@@ -87,9 +38,9 @@ class LlamaTpuActor:
 
         # This is a best practice that will help us catch and
         # raise errors very quickly.
-        import os
+        import os        
         import socket
-        print(f"Using model: {model_name}.")
+        print(f"Initializing model: {model_name}.")
         self._host_name = socket.gethostname()
         self._model_name = model_name
         self._tokenizer_path = tokenizer_path
@@ -99,7 +50,10 @@ class LlamaTpuActor:
         self._temperature = temperature
         self._top_p = top_p
         self._dynamo = dynamo
-        self._ckpt_dir = os.path.join(_CHECKPOINT_PATH, model_name)
+        if _LOAD_CHECKPOINT:
+            self._ckpt_dir = os.path.join(_CHECKPOINT_PATH, model_name)
+        else:
+            self._ckpt_dir = ""
         self._worker_id = worker_id
 
     def __repr__(self) -> str:
@@ -108,10 +62,17 @@ class LlamaTpuActor:
 
     def initialize(self):
         """Initializes the LLaMA generator."""
+        import os
+        os.environ["PJRT_DEVICE"] = "TPU"
+        if _ENABLE_VERBOSE_LOGGING:
+            os.environ["TPU_STDERR_LOG_LEVEL"] = "0"
+            os.environ["TPU_MIN_LOG_LEVEL"] = "0"
+            os.environ["TF_CPP_VMODULE"] = "xla_graph_executor=5,pjrt_computation_client=3"
         import torch
         import torch_xla
         import torch_xla.runtime as xr
         from llama import Llama
+        print("Building generator")
         self.generator = Llama.build(
             ckpt_dir=self._ckpt_dir,
             tokenizer_path=self._tokenizer_path,
@@ -131,14 +92,8 @@ class LlamaTpuActor:
             )
             return results
 
-
-@serve.deployment(
-    autoscaling_config={
-        "min_replicas": 1,
-        "max_replicas": 1,
-    })
+@ray.remote
 class LlamaServer:
-    """A ray actor representing a shard of the Llama serving workload."""
     def __init__(
         self,
         model_name: str,
@@ -149,24 +104,36 @@ class LlamaServer:
         temperature: float = 0.6,
         top_p: int = 1,
         dynamo: bool = True):
-        assert model_name in _VALID_MODELS
+        self._model_name = model_name
+        self._tokenizer_path = tokenizer_path
+        self._max_batch_size = max_batch_size
+        self._max_seq_len = max_seq_len
+        self._max_gen_len = max_gen_len
+        self._temperature = temperature
+        self._top_p = top_p
+        self._dynamo = dynamo
+
+    def initialize(self):
+        assert self._model_name in _VALID_MODELS
         tpu_pod_name = ray.util.accelerators.tpu.get_current_pod_name()
         num_tpu_pod_hosts = ray.util.accelerators.tpu.get_current_pod_worker_count()
         assert ray.available_resources()[tpu_pod_name] == num_tpu_pod_hosts
         actor_def = LlamaTpuActor.options(resources={tpu_pod_name: 1, "TPU": 4})
         print("Creating TPU VM shards.")
-        self._shards = [actor_def.remote(
-            model_name=model_name,
-            worker_id=i,
-            tokenizer_path=tokenizer_path,
-            max_batch_size=max_batch_size,
-            max_seq_len=max_seq_len,
-            max_gen_len=max_gen_len,
-            temperature=temperature,
-            top_p=top_p,
-            dynamo=dynamo,
-        ) for i in range(num_tpu_pod_hosts)]
         try:
+            self._shards = [actor_def.remote(
+                model_name=self._model_name,
+                worker_id=i,
+                tokenizer_path=self._tokenizer_path,
+                max_batch_size=self._max_batch_size,
+                max_seq_len=self._max_seq_len,
+                max_gen_len=self._max_gen_len,
+                temperature=self._temperature,
+                top_p=self._top_p,
+                dynamo=self._dynamo,
+            ) for i in range(num_tpu_pod_hosts)]
+            print("Created shards")
+            print("Initializing shards")
             ray.get([s.initialize.remote() for s in self._shards])
             # warmup
             self.generate_batch(["I believe the meaning of life is ..."])
@@ -187,6 +154,30 @@ class LlamaServer:
         return f"[{self._model_name}-shard]: "
 
 
-llama_7b = LlamaServer.options(ray_actor_options={"TPU-v4-8-head": 1}).bind(model_name="llama-2-7b")
-llama_70b = LlamaServer.options(ray_actor_options={"TPU-v4-32-head": 1}).bind(model_name="llama-2-70b")
-gradio = MyGradioServer(LlamaServer.bind(model_name="llama-2-7b"))
+def main():
+    print("Initializing Ray")
+    ray.init()
+
+    print("Resources available to Ray: ", ray.available_resources())
+
+    server = LlamaServer.options(
+        resources={"TPU-v4-8-head": 1}).remote(
+            model_name="llama-2-7b")
+    try:
+        print("Initializing the server.")
+        start_time = time.time()
+        ray.get(server.initialize.remote())
+        print(f"Took {time.time() - start_time}s to initialize.")
+
+        print("Running some requests now...")
+        start_time = time.time()
+        ray.get(server.generate_batch.remote(["I believe the meaning of life is"]))
+        print(f"Took {time.time() - start_time}s to run.")
+    except Exception as e:
+        print("Captured failure: ", e)
+        print("Shutting down the workload...")
+        ray.shutdown()
+
+
+if __name__ == "__main__":
+    main()
