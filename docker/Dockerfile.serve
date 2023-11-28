@@ -16,14 +16,18 @@ FROM us-central1-docker.pkg.dev/tpu-pytorch-releases/docker/xla:nightly_3.8_tpuv
 
 USER root
 
-RUN apt-get -y update && apt-get -y upgrade
+RUN apt-get -y update && apt-get -y upgrade && apt-get install coreutils
 RUN apt-get -y install rsync
 
 COPY tokenizer.model .
 
-RUN pip install --upgrade "ray[default]==2.7.0rc0" "ray[serve]==2.7.0rc0"
+RUN pip install --upgrade "ray[default]==2.8.0" "ray[serve]==2.8.0"
+RUN pip install https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-3.0.0.dev0-cp38-cp38-manylinux2014_x86_64.whl
+
 RUN pip install gradio==3.19
 
 RUN git clone --branch ray-llama-demo https://github.com/allenwang28/llama.git
 RUN pip install -r llama/requirements.txt
 RUN pip install -e llama/
+
+RUN pip install google-cloud-storage

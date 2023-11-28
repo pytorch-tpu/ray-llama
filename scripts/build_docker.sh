@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-GCR_PATH=gcr.io/mlperf-high-priority-project/ray-llama2# fill this part out
+GCR_PATH=gcr.io/mlperf-high-priority-project/ray-llama2 # fill this part out
 
 if [ -z $GCR_PATH ]
 then
@@ -57,18 +57,20 @@ shift $((OPTIND -1))
 
 # Check remaining arguments
 if [ "$#" -ne 1 ]; then
-  echo "Exactly one argument required: cpu, gpu, or all."
+  echo "Exactly one argument required: train, serve, or all."
   show_help
   exit 1
 fi
 
+cd docker
+
 # Main logic for building
 case $1 in
-  cpu)
+  train)
     echo "Building for train..."
     build_and_deploy train
     ;;
-  gpu)
+  serve)
     echo "Building for serve..."
     build_and_deploy serve
     ;;
@@ -83,3 +85,5 @@ case $1 in
     exit 1
     ;;
 esac
+
+cd -
