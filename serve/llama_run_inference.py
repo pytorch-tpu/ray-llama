@@ -18,6 +18,12 @@ _CHECKPOINT_PATH = "gs://ray-llama-demo"
 _ENABLE_VERBOSE_LOGGING = True
 _LOAD_CHECKPOINT = True
 
+_MODEL_ACCELERATOR_MAP = {
+    "llama-2-7b": "v4-8",
+    "llama-2-13b": "v4-8",
+    "llama-2-70b": "v4-32",
+}
+
 
 @ray.remote(resources={"TPU": 4})
 class LlamaTpuActor:
@@ -159,10 +165,13 @@ def main():
     ray.init()
 
     print("Resources available to Ray: ", ray.available_resources())
+    model_name = "llama-2-70b"
+    accelerator = _MODEL_ACCELERATOR_MAP[model_name]
+    print("Running model: {} on accelerator: {}".format(model_name, accelerator))
 
     server = LlamaServer.options(
-        resources={"TPU-v4-8-head": 1}).remote(
-            model_name="llama-2-7b")
+        resources={f"TPU-{accelerator}-head": 1}).remote(
+            model_name=model_name)
     try:
         print("Initializing the server.")
         start_time = time.time()
